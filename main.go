@@ -27,6 +27,7 @@ const (
 	user     = lib.ElosuUser
 	password = lib.ElosuPassword
 	dbname   = lib.ElosuDbname
+	token    = lib.ElosuBotToken
 )
 
 func init() {
@@ -36,7 +37,7 @@ func init() {
 }
 
 func main() {
-	dg, err := discordgo.New("Bot " + lib.ElosuBotToken)
+	dg, err := discordgo.New("Bot " + token)
 	if err != nil {
 		fmt.Println("error creating Discord session,", err)
 		return
@@ -125,7 +126,7 @@ func getUserInfo(id string) string {
 		checkErr(err)
 	}
 
-	out = fmt.Sprintf("User: %v \nElo: %v \nWins: %v ", name, elo, wins)
+	out = fmt.Sprintf("User: %v \nElo: %v \nWins: %v \n Join Date: %v ", name, elo, wins, joindate)
 
 	return out
 
