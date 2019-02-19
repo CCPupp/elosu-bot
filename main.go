@@ -89,16 +89,19 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	// If the message starts with trigger
 	if strings.HasPrefix(m.Content, "e!") {
 
+		//help command describes all commands for the average user
 		if strings.HasSuffix(m.Content, "help") {
 			out := "```\ne!stats:      Shows your profile information.\ne!create:     Creates your account, add your osu ID after the command.\ne!namechange: Changes your account name.\ne!join:       Joins the searching for players queue.\ne!leave:      Leaves the queue.```"
 			s.ChannelMessageSend(m.ChannelID, out)
 		}
 
+		//stats shows all user unformation
 		if strings.HasSuffix(m.Content, "stats") {
 			out := printUserInfo(m.Author.ID)
 			s.ChannelMessageSend(m.ChannelID, out)
 		}
 
+		//creates an account
 		if strings.Contains(m.Content, "create") {
 			if isExisting(m.Author.ID) {
 				s.ChannelMessageSend(m.ChannelID, "You already have an account!")
@@ -116,6 +119,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			}
 		}
 
+		//changes the username
 		if strings.Contains(m.Content, "namechange") {
 			str := strings.SplitAfterN(m.Content, " ", 2)
 			changeName(str[1], m.Author.ID)
@@ -124,6 +128,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			s.ChannelMessageSend(m.ChannelID, name)
 		}
 
+		//joins the queue
 		if strings.Contains(m.Content, "join") {
 			if isExisting(m.Author.ID) {
 				_, name, elo, _, _, id := getUserInfo(m.Author.ID)
@@ -138,6 +143,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			}
 		}
 
+		//leaves the queue
 		if strings.Contains(m.Content, "leave") {
 			if isExisting(m.Author.ID) {
 				_, name, elo, _, _, id := getUserInfo(m.Author.ID)
@@ -153,6 +159,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 		// ADMIN ONLY COMMANDS
 		if checkAdmin(m.Author.ID) {
+			//shows the current users in queue
 			if strings.Contains(m.Content, "queue") {
 				out := "In queue:\n ```"
 				for i := 0; i < len(pqueue); i++ {
@@ -166,6 +173,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 				s.ChannelMessageSend(m.ChannelID, out)
 			}
 
+			//submits a score card to the database
 			if strings.Contains(m.Content, "submit") {
 				str := strings.Split(m.Content, " ")
 				matchResults(str[2], str[3])
@@ -201,6 +209,53 @@ func removeFromQueue(player Player, second bool) {
 		}
 	}
 }
+
+func matchResults(idWin, idLose string) {
+	var (
+		welo, wwins, wlosses int
+		lelo, lwins, llosses int
+	)
+	_, _, welo, wwins, wlosses, _ = getUserInfo(idWin)
+	_, _, lelo, lwins, llosses, _ = getUserInfo(idLose)
+
+	elow, elol := calcK(1, welo, lelo, (wwins + wlosses), (lwins + llosses))
+
+	updatePlayerElo(elow, idWin, true)
+	updatePlayerElo(elol, idLose, false)
+
+}
+
+// Constantly running method that finds 2 players that have been added to the queue that are near enough to each other in rank and pairs them together.
+func playerQueue(dg *discordgo.Session) {
+	for true {
+
+		if len(pqueue) >= 2 {
+			for i := 0; i < len(pqueue); i++ {
+				for j := 0; j < len(pqueue); j++ {
+					//check if players are close enough to each other
+					if inBetween(pqueue[j].Elo, pqueue[i].Elo-pqueue[i].Wait, pqueue[i].Elo+pqueue[i].Wait) && pqueue[i].ID != pqueue[j].ID {
+						//return these 2 players
+						dg.ChannelMessageSend("456253171220611082", "<@"+strconv.Itoa(pqueue[i].ID)+"> vs <@"+strconv.Itoa(pqueue[j].ID)+">")
+						removeFromQueue(pqueue[i], false)
+						removeFromQueue(pqueue[j], true)
+					}
+				}
+			}
+		}
+
+		//increment all players wait by some value
+		for i := 0; i < len(pqueue); i++ {
+			var x = pqueue[i]
+			x.Wait += 3
+			pqueue[i] = x
+		}
+
+		//wait x seconds
+		time.Sleep(3 * time.Second)
+	}
+}
+
+//***DATABASE COMMANDS***
 
 func addMatchToDB(mid, wid, lid, wscore, lscore int) {
 	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
@@ -240,21 +295,6 @@ func changeName(name, id string) {
 	//Test to add my user to the db
 	_, err = db.Exec("UPDATE player SET name = $1 WHERE discid = $2", name, id)
 	checkErr(err)
-}
-
-func matchResults(idWin, idLose string) {
-	var (
-		welo, wwins, wlosses int
-		lelo, lwins, llosses int
-	)
-	_, _, welo, wwins, wlosses, _ = getUserInfo(idWin)
-	_, _, lelo, lwins, llosses, _ = getUserInfo(idLose)
-
-	elow, elol := calcK(1, welo, lelo, (wwins + wlosses), (lwins + llosses))
-
-	updatePlayerElo(elow, idWin, true)
-	updatePlayerElo(elol, idLose, false)
-
 }
 
 func updatePlayerElo(elo int, id string, win bool) {
@@ -408,36 +448,6 @@ func newUser(str, name, discordID string) {
 
 }
 
-// Constantly running method that finds 2 players that have been added to the queue that are near enough to each other in rank and pairs them together.
-func playerQueue(dg *discordgo.Session) {
-	for true {
-
-		if len(pqueue) >= 2 {
-			for i := 0; i < len(pqueue); i++ {
-				for j := 0; j < len(pqueue); j++ {
-					//check if players are close enough to each other
-					if inBetween(pqueue[j].Elo, pqueue[i].Elo-pqueue[i].Wait, pqueue[i].Elo+pqueue[i].Wait) && pqueue[i].ID != pqueue[j].ID {
-						//return these 2 players
-						dg.ChannelMessageSend("456253171220611082", "<@"+strconv.Itoa(pqueue[i].ID)+"> vs <@"+strconv.Itoa(pqueue[j].ID)+">")
-						removeFromQueue(pqueue[i], false)
-						removeFromQueue(pqueue[j], true)
-					}
-				}
-			}
-		}
-
-		//increment all players wait by some value
-		for i := 0; i < len(pqueue); i++ {
-			var x = pqueue[i]
-			x.Wait += 3
-			pqueue[i] = x
-		}
-
-		//wait x seconds
-		time.Sleep(3 * time.Second)
-	}
-}
-
 //used to check if player is near another in elo
 func inBetween(i, min, max int) bool {
 	if (i >= min) && (i <= max) {
@@ -450,7 +460,6 @@ func inBetween(i, min, max int) bool {
 // ********** START ELO CALCULATOR **********
 // Does calculatons to find the correct elo of the 2 players and returns an HTML string with the new values
 func calcElo(welo, lelo, wk, lk int) (int, int) {
-	// Fuck what does this do again
 	var wdiv = float64(float64(welo) / 400.0)
 	var rw = float64(math.Pow(10, wdiv))
 	var ldiv = float64(float64(lelo) / 400.0)
