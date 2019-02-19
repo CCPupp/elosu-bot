@@ -273,7 +273,7 @@ func addMatchToDB(mid, wid, lid, wscore, lscore int) {
 	}
 
 	//Test to add my user to the db
-	_, err = db.Exec("INSERT INTO matches (matchid, wid, lid, wscore, lscore, date) VALUES ( $1, $2, $3, $4, $5, current_timestamp)", mid, wid, lid, wscore, lscore)
+	_, err = db.Exec("INSERT INTO matches (mid, wid, lid, wscore, lscore, date) VALUES ( $1, $2, $3, $4, $5, current_timestamp)", mid, wid, lid, wscore, lscore)
 	checkErr(err)
 }
 
