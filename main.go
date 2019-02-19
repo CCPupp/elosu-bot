@@ -163,7 +163,13 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 			if strings.Contains(m.Content, "submit") {
 				str := strings.Split(m.Content, " ")
-				matchResults(str[1], str[2])
+				matchResults(str[2], str[3])
+				matchid, _ := strconv.Atoi(str[1])
+				winnerid, _ := strconv.Atoi(str[2])
+				loserid, _ := strconv.Atoi(str[3])
+				winnerscore, _ := strconv.Atoi(str[4])
+				loserscore, _ := strconv.Atoi(str[5])
+				addMatchToDB(matchid, winnerid, loserid, winnerscore, loserscore)
 			}
 		}
 	}
@@ -189,6 +195,26 @@ func removeFromQueue(player Player, second bool) {
 			delete(pqueue, i)
 		}
 	}
+}
+
+func addMatchToDB(mid, wid, lid, wscore, lscore int) {
+	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
+		"password=%s dbname=%s sslmode=disable",
+		host, port, user, password, dbname)
+	db, err := sql.Open("postgres", psqlInfo)
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+	//Pings to check the connection
+	err = db.Ping()
+	if err != nil {
+		panic(err)
+	}
+
+	//Test to add my user to the db
+	_, err = db.Exec("INSERT INTO matches (matchid, wid, lid, wscore, lscore, date) VALUES ( $1, $2, $3, $4, $5, current_timestamp)", mid, wid, lid, wscore, lscore)
+	checkErr(err)
 }
 
 func changeName(name, id string) {
