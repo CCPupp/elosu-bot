@@ -19,8 +19,8 @@ import (
 
 var (
 	// Token export
-	Token string
-	//pqueue                       map[Player]int
+	Token                        string
+	pqueue                       = make(map[int]Player)
 	player1elo, player1pc        int
 	player2elo, player2pc        int
 	winner, finallelo, finalwelo int
@@ -31,6 +31,8 @@ var (
 type Player struct {
 	Name string
 	Elo  int
+	Wait int
+	ID   int
 }
 
 const (
@@ -54,6 +56,7 @@ func main() {
 		fmt.Println("error creating Discord session,", err)
 		return
 	}
+	go playerQueue(dg)
 
 	// Register the messageCreate func as a callback for MessageCreate events.
 	dg.AddHandler(messageCreate)
@@ -85,16 +88,6 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 	// If the message starts with trigger
 	if strings.HasPrefix(m.Content, "e!") {
-
-		// If the message is "ping" reply with "Pong!"
-		if strings.HasSuffix(m.Content, "ping") {
-			s.ChannelMessageSend(m.ChannelID, "Pong!")
-		}
-
-		// If the message is "pong" reply with "Ping!"
-		if strings.HasSuffix(m.Content, "pong") {
-			s.ChannelMessageSend(m.ChannelID, "Ping!")
-		}
 
 		if strings.HasSuffix(m.Content, "stats") {
 			out := printUserInfo(m.Author.ID)
@@ -130,8 +123,62 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			str := strings.Split(m.Content, " ")
 			matchResults(str[1], str[2])
 		}
-	}
 
+		if strings.Contains(m.Content, "queue") {
+			out := "In queue:\n ```"
+			for i := 0; i < len(pqueue); i++ {
+				out += pqueue[i].Name + " | Waiting for: " + strconv.Itoa(pqueue[i].Wait) + "\n"
+			}
+			if len(pqueue) == 0 {
+				out = "No one is in queue."
+			} else {
+				out += "```"
+			}
+			s.ChannelMessageSend(m.ChannelID, out)
+		}
+
+		if strings.Contains(m.Content, "join") {
+			if isExisting(m.Author.ID) {
+				_, name, elo, _, _, id := getUserInfo(m.Author.ID)
+				newPlayer := Player{
+					Name: name,
+					Elo:  elo,
+					Wait: 0,
+					ID:   id,
+				}
+				addToQueue(newPlayer)
+				s.ChannelMessageSend(m.ChannelID, "Added "+name+" to queue!")
+			}
+		}
+
+		if strings.Contains(m.Content, "leave") {
+			if isExisting(m.Author.ID) {
+				_, name, elo, _, _, id := getUserInfo(m.Author.ID)
+				newPlayer := Player{
+					Name: name,
+					Elo:  elo,
+					Wait: 0,
+					ID:   id,
+				}
+				removeFromQueue(newPlayer, false)
+				s.ChannelMessageSend(m.ChannelID, "Removed "+name+" from the queue.")
+			}
+		}
+	}
+}
+func addToQueue(player Player) {
+	pqueue[len(pqueue)] = player
+}
+
+func removeFromQueue(player Player, second bool) {
+	for i := 0; i < len(pqueue); i++ {
+		if second {
+			i++
+		}
+		if pqueue[i].ID == player.ID {
+			delete(pqueue, i)
+		}
+	}
 }
 
 func changeName(name, id string) {
@@ -321,21 +368,43 @@ func newUser(str, name, discordID string) {
 }
 
 // Constantly running method that finds 2 players that have been added to the queue that are near enough to each other in rank and pairs them together.
-// func playerQueue() {
-// 	for true {
-// 		//example player Pupper
-// 		pupper := Player{
-// 			Name: "Pupper",
-// 			Elo:  1500,
-// 		}
-// 		pqueue[pupper] = 0
+func playerQueue(dg *discordgo.Session) {
+	for true {
 
-// 		sort.Sort(pqueue)
+		if len(pqueue) >= 2 {
+			for i := 0; i < len(pqueue); i++ {
+				for j := 0; j < len(pqueue); j++ {
+					//check if players are close enough to each other
+					if inBetween(pqueue[j].Elo, pqueue[i].Elo-pqueue[i].Wait, pqueue[i].Elo+pqueue[i].Wait) && pqueue[i].ID != pqueue[j].ID {
+						//return these 2 players
+						dg.ChannelMessageSend("456253171220611082", "<@"+strconv.Itoa(pqueue[i].ID)+"> vs <@"+strconv.Itoa(pqueue[j].ID)+">")
+						removeFromQueue(pqueue[i], false)
+						removeFromQueue(pqueue[j], true)
+					}
+				}
+			}
+		}
 
-// 		//wait 2 seconds
-// 		time.Sleep(2 * time.Second)
-// 	}
-// }
+		//increment all players wait by some value
+		for i := 0; i < len(pqueue); i++ {
+			var x = pqueue[i]
+			x.Wait += 3
+			pqueue[i] = x
+		}
+
+		//wait x seconds
+		time.Sleep(3 * time.Second)
+	}
+}
+
+//used to check if player is near another in elo
+func inBetween(i, min, max int) bool {
+	if (i >= min) && (i <= max) {
+		return true
+	}
+	return false
+
+}
 
 // ********** START ELO CALCULATOR **********
 // Does calculatons to find the correct elo of the 2 players and returns an HTML string with the new values
