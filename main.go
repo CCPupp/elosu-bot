@@ -119,24 +119,6 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			s.ChannelMessageSend(m.ChannelID, name)
 		}
 
-		if strings.Contains(m.Content, "submit") {
-			str := strings.Split(m.Content, " ")
-			matchResults(str[1], str[2])
-		}
-
-		if strings.Contains(m.Content, "queue") {
-			out := "In queue:\n ```"
-			for i := 0; i < len(pqueue); i++ {
-				out += pqueue[i].Name + " | Waiting for: " + strconv.Itoa(pqueue[i].Wait) + "\n"
-			}
-			if len(pqueue) == 0 {
-				out = "No one is in queue."
-			} else {
-				out += "```"
-			}
-			s.ChannelMessageSend(m.ChannelID, out)
-		}
-
 		if strings.Contains(m.Content, "join") {
 			if isExisting(m.Author.ID) {
 				_, name, elo, _, _, id := getUserInfo(m.Author.ID)
@@ -164,8 +146,36 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 				s.ChannelMessageSend(m.ChannelID, "Removed "+name+" from the queue.")
 			}
 		}
+		// ADMIN ONLY COMMANDS
+		if checkAdmin(m.Author.ID) {
+			if strings.Contains(m.Content, "queue") {
+				out := "In queue:\n ```"
+				for i := 0; i < len(pqueue); i++ {
+					out += pqueue[i].Name + " | Waiting for: " + strconv.Itoa(pqueue[i].Wait) + "\n"
+				}
+				if len(pqueue) == 0 {
+					out = "No one is in queue."
+				} else {
+					out += "```"
+				}
+				s.ChannelMessageSend(m.ChannelID, out)
+			}
+
+			if strings.Contains(m.Content, "submit") {
+				str := strings.Split(m.Content, " ")
+				matchResults(str[1], str[2])
+			}
+		}
 	}
 }
+
+func checkAdmin(id string) bool {
+	//Pupper, ode
+	admins := map[string]bool{"98190856254676992": true, "98183996185255936": true}
+
+	return admins[id]
+}
+
 func addToQueue(player Player) {
 	pqueue[len(pqueue)] = player
 }
