@@ -89,6 +89,11 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	// If the message starts with trigger
 	if strings.HasPrefix(m.Content, "e!") {
 
+		if strings.HasSuffix(m.Content, "help") {
+			out := "```\ne!stats:      Shows your profile information.\ne!create:     Creates your account, add your osu ID after the command.\ne!namechange: Changes your account name.\ne!join:       Joins the searching for players queue.\ne!leave:      Leaves the queue.```"
+			s.ChannelMessageSend(m.ChannelID, out)
+		}
+
 		if strings.HasSuffix(m.Content, "stats") {
 			out := printUserInfo(m.Author.ID)
 			s.ChannelMessageSend(m.ChannelID, out)
